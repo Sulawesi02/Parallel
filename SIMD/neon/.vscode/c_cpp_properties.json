@@ -1,0 +1,26 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "C:/Strawberry/c/bin/../lib/gcc/i686-w64-mingw32/4.9.2/include",
+                "C:/Strawberry/c/bin/../lib/gcc/i686-w64-mingw32/4.9.2/../../../../include",
+                "C:/Strawberry/c/bin/../lib/gcc/i686-w64-mingw32/4.9.2/include-fixed",
+                "C:/Strawberry/c/bin/../lib/gcc/i686-w64-mingw32/4.9.2/../../../../i686-w64-mingw32/include",
+                "C:/Strawberry/c/lib/gcc/../../i686-w64-mingw32/include/c++",
+                "C:/Strawberry/c/lib/gcc/../../i686-w64-mingw32/include/c++/i686-w64-mingw32",
+                "C:/Strawberry/c/lib/gcc/../../i686-w64-mingw32/include/c++/backward"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "windows-gcc-x86"
+        }
+    ],
+    "version": 4
+}

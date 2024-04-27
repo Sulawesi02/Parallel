@@ -5,12 +5,12 @@
 
 using namespace std;
 
-const int N = 5000; // ¶¨Òå×î´ó¾ØÕó´óĞ¡
+const int N = 5000; // å®šä¹‰æœ€å¤§çŸ©é˜µå¤§å°
 
 void reset(float**& A, float*& b, int n) {
     A = new float* [n];
     b = new float[n];
-    srand(time(nullptr)); // ³õÊ¼»¯Ëæ»úÊıÖÖ×Ó
+    srand(time(nullptr)); // åˆå§‹åŒ–éšæœºæ•°ç§å­
     for (int i = 0; i < n; i++) {
         A[i] = new float[n];
         A[i][i] = 1.0;
@@ -21,24 +21,24 @@ void reset(float**& A, float*& b, int n) {
         for (int i = k + 1; i < n; i++)
             for (int j = 0; j < n; j++)
                 A[i][j] += A[k][j];
-    // Éú³ÉËæ»úÏòÁ¿b
+    // ç”Ÿæˆéšæœºå‘é‡b
     for (int i = 0; i < n; i++) {
         b[i] = static_cast<float>(rand()) / RAND_MAX;
     }
 }
 
-// SSEÎ´¶ÔÆë
+// SSEæœªå¯¹é½
 void sse_unalign(float** A, float* b, int n) {
-    // ÏûÔª¹ı³Ì
+    // æ¶ˆå…ƒè¿‡ç¨‹
     for (int k = 0; k < n; k++) {
-        __m128 div; // ÓÃÓÚ´æ´¢³ıÊı
-        float factor = A[k][k]; // ±£´æ¶Ô½ÇÏßÔªËØµÄÖµ
-        div = _mm_set1_ps(1.0f / factor); // ¼ÆËã³ıÊıµÄµ¹Êı
-        // Ê¹ÓÃSSEÖ¸Áî¼¯½øĞĞÏòÁ¿»¯²Ù×÷
+        __m128 div; // ç”¨äºå­˜å‚¨é™¤æ•°
+        float factor = A[k][k]; // ä¿å­˜å¯¹è§’çº¿å…ƒç´ çš„å€¼
+        div = _mm_set1_ps(1.0f / factor); // è®¡ç®—é™¤æ•°çš„å€’æ•°
+        // ä½¿ç”¨SSEæŒ‡ä»¤é›†è¿›è¡Œå‘é‡åŒ–æ“ä½œ
         for (int i = k + 1; i < n; i++) {
-            // ¼ÆËãfactor£¬ÕâÀï¼ÙÉèA[k][k]²»Îª0
-            factor = A[i][k] * factor; // ÕâÀïĞŞ¸ÄÎªÊ¹ÓÃÔ¤ÏÈ¼ÆËãµÄµ¹Êı
-            // ÏòÁ¿»¯¼õ·¨²Ù×÷
+            // è®¡ç®—factorï¼Œè¿™é‡Œå‡è®¾A[k][k]ä¸ä¸º0
+            factor = A[i][k] * factor; // è¿™é‡Œä¿®æ”¹ä¸ºä½¿ç”¨é¢„å…ˆè®¡ç®—çš„å€’æ•°
+            // å‘é‡åŒ–å‡æ³•æ“ä½œ
             int j = n - 4;
             for (; j >= k; j -= 4) {
                 __m128 t1 = _mm_loadu_ps(&A[k][j]);
@@ -47,26 +47,26 @@ void sse_unalign(float** A, float* b, int n) {
                 t2 = _mm_sub_ps(t2, t3);
                 _mm_storeu_ps(&A[i][j], t2);
             }
-            // ´¦ÀíÊ£ÓàµÄ±êÁ¿²Ù×÷
+            // å¤„ç†å‰©ä½™çš„æ ‡é‡æ“ä½œ
             for (; j > k; j--) {
                 A[i][j] -= factor * A[k][j];
             }
-            // ¸üĞÂbÏòÁ¿
+            // æ›´æ–°bå‘é‡
             b[i] -= factor * b[k];
         }
-        // ½«A[k][k]ÉèÖÃÎª1.0f£¬ÒòÎªÒÑ¾­ÓÃµ½ÁËËüµÄµ¹Êı
+        // å°†A[k][k]è®¾ç½®ä¸º1.0fï¼Œå› ä¸ºå·²ç»ç”¨åˆ°äº†å®ƒçš„å€’æ•°
         A[k][k] = 1.0f;
     }
-    // »Ø´ú¹ı³Ì
+    // å›ä»£è¿‡ç¨‹
     float* x = new float[n];
-    x[n - 1] = b[n - 1] / A[n - 1][n - 1]; // ¼ÆËã×îºóÒ»¸öÔªËØ
-    // Ê¹ÓÃ±êÁ¿²Ù×÷½øĞĞ»Ø´ú
+    x[n - 1] = b[n - 1] / A[n - 1][n - 1]; // è®¡ç®—æœ€åä¸€ä¸ªå…ƒç´ 
+    // ä½¿ç”¨æ ‡é‡æ“ä½œè¿›è¡Œå›ä»£
     for (int i = n - 2; i >= 0; i--) {
         float sum = b[i];
         for (int j = i + 1; j < n; j++) {
             sum -= A[i][j] * x[j];
         }
-        x[i] = sum / A[i][i]; // »Ø´úµÃµ½x[i]
+        x[i] = sum / A[i][i]; // å›ä»£å¾—åˆ°x[i]
     }
 }
 
@@ -74,15 +74,15 @@ int main() {
     float** A;
     float* b;
 
-    // ¶Ô²»Í¬µÄÊı¾İ¹æÄ£½øĞĞ²âÊÔ
+    // å¯¹ä¸åŒçš„æ•°æ®è§„æ¨¡è¿›è¡Œæµ‹è¯•
     for (int sizes : {500, 1000, 2000, 5000}) {
         reset(A, b, sizes);
 
-        clock_t start = clock(); // ¿ªÊ¼Ê±¼ä
-        sse_unalign(A, b, sizes); // Ö´ĞĞ¸ßË¹ÏûÈ¥·¨
-        clock_t end = clock(); // ½áÊøÊ±¼ä
+        clock_t start = clock(); // å¼€å§‹æ—¶é—´
+        sse_unalign(A, b, sizes); // æ‰§è¡Œé«˜æ–¯æ¶ˆå»æ³•
+        clock_t end = clock(); // ç»“æŸæ—¶é—´
 
-        float time_taken = float(end - start) / CLOCKS_PER_SEC; // ¼ÆËãÊ±¼ä²î
+        float time_taken = float(end - start) / CLOCKS_PER_SEC; // è®¡ç®—æ—¶é—´å·®
         cout << "Sizes: " << sizes << ", Time taken: " << time_taken << " seconds" << endl;
 
     }

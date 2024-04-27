@@ -5,12 +5,12 @@
 
 using namespace std;
 
-const int N = 5000; // ¶¨Òå×î´ó¾ØÕó´óĞ¡
+const int N = 5000; // å®šä¹‰æœ€å¤§çŸ©é˜µå¤§å°
 
 void reset(float**& A, float*& b, int n) {
     A = new float* [n];
     b = new float[n];
-    srand(time(nullptr)); // ³õÊ¼»¯Ëæ»úÊıÖÖ×Ó
+    srand(time(nullptr)); // åˆå§‹åŒ–éšæœºæ•°ç§å­
     for (int i = 0; i < n; i++) {
         A[i] = new float[n];
         A[i][i] = 1.0;
@@ -21,60 +21,60 @@ void reset(float**& A, float*& b, int n) {
         for (int i = k + 1; i < n; i++)
             for (int j = 0; j < n; j++)
                 A[i][j] += A[k][j];
-    // Éú³ÉËæ»úÏòÁ¿b
+    // ç”Ÿæˆéšæœºå‘é‡b
     for (int i = 0; i < n; i++) {
         b[i] = static_cast<float>(rand()) / RAND_MAX;
     }
 }
 
-// AVX-512¶ÔÆë
+// AVX-512å¯¹é½
 void avx512_align(float** A, float* b, int n) {
-    // ÏûÔª¹ı³Ì
+    // æ¶ˆå…ƒè¿‡ç¨‹
     for (int k = 0; k < n; k++) {
         __m512 diagonal = _mm512_set1_ps(A[k][k]);
-        A[k][k] = 1.0f; // ÏûÔªºóÉèÖÃ¶Ô½ÇÏßÔªËØÎª1.0f
-        // ´¦Àí³ı·¨²¿·ÖµÄ¶ÔÆë
+        A[k][k] = 1.0f; // æ¶ˆå…ƒåè®¾ç½®å¯¹è§’çº¿å…ƒç´ ä¸º1.0f
+        // å¤„ç†é™¤æ³•éƒ¨åˆ†çš„å¯¹é½
         int j = k + 1;
-        while (j % 16 != 0) { // È·±£jÊÇ16µÄ±¶ÊıÒÔÊÊÓ¦AVX-512µÄ512Î»¼Ä´æÆ÷
+        while (j % 16 != 0) { // ç¡®ä¿jæ˜¯16çš„å€æ•°ä»¥é€‚åº”AVX-512çš„512ä½å¯„å­˜å™¨
             A[k][j] /= A[k][k];
             j++;
         }
-        // Ê¹ÓÃAVX-512½øĞĞÏòÁ¿»¯³ı·¨
+        // ä½¿ç”¨AVX-512è¿›è¡Œå‘é‡åŒ–é™¤æ³•
         for (; j + 16 <= n; j += 16) {
             __m512 row_k = _mm512_load_ps(&A[k][j]);
             __m512 row_k_div = _mm512_div_ps(row_k, diagonal);
             _mm512_store_ps(&A[k][j], row_k_div);
         }
-        // ´¦ÀíÊ£ÓàµÄ±êÁ¿³ı·¨
+        // å¤„ç†å‰©ä½™çš„æ ‡é‡é™¤æ³•
         for (; j < n; j++) {
             A[k][j] /= A[k][k];
         }
-        // ¸üĞÂbÏòÁ¿
+        // æ›´æ–°bå‘é‡
         for (int i = k + 1; i < n; i++) {
             __m512 factor = _mm512_set1_ps(A[i][k]);
-            A[i][k] = 0.0f; // ÏûÔª
-            // ´¦Àí¼õ·¨²¿·ÖµÄ¶ÔÆë
+            A[i][k] = 0.0f; // æ¶ˆå…ƒ
+            // å¤„ç†å‡æ³•éƒ¨åˆ†çš„å¯¹é½
             j = k + 1;
             while (j % 16 != 0) {
                 A[i][j] -= A[i][k] * A[k][j];
                 j++;
             }
-            // Ê¹ÓÃAVX-512½øĞĞÏòÁ¿»¯¼õ·¨
+            // ä½¿ç”¨AVX-512è¿›è¡Œå‘é‡åŒ–å‡æ³•
             for (; j + 16 <= n; j += 16) {
                 __m512 row_i = _mm512_load_ps(&A[i][j]);
                 __m512 row_k = _mm512_load_ps(&A[k][j]);
                 __m512 row_i_sub = _mm512_sub_ps(row_i, _mm512_mul_ps(row_k, factor));
                 _mm512_store_ps(&A[i][j], row_i_sub);
             }
-            // ´¦ÀíÊ£ÓàµÄ±êÁ¿¼õ·¨
+            // å¤„ç†å‰©ä½™çš„æ ‡é‡å‡æ³•
             for (; j < n; j++) {
                 A[i][j] -= A[i][k] * A[k][j];
             }
-            // ¸üĞÂbÏòÁ¿
+            // æ›´æ–°bå‘é‡
             b[i] -= A[i][k] * b[k];
         }
     }
-    // »Ø´ú¹ı³Ì£¨±êÁ¿²Ù×÷£¬AVX-512²»ÊÊÓÃ£©
+    // å›ä»£è¿‡ç¨‹ï¼ˆæ ‡é‡æ“ä½œï¼ŒAVX-512ä¸é€‚ç”¨ï¼‰
     float* x = new float[n];
     x[n - 1] = b[n - 1] / A[n - 1][n - 1];
     for (int i = n - 2; i >= 0; i--) {
@@ -90,15 +90,15 @@ int main() {
     float** A;
     float* b;
 
-    // ¶Ô²»Í¬µÄÊı¾İ¹æÄ£½øĞĞ²âÊÔ
+    // å¯¹ä¸åŒçš„æ•°æ®è§„æ¨¡è¿›è¡Œæµ‹è¯•
     for (int sizes : {500, 1000, 2000, 5000}) {
         reset(A, b, sizes);
 
-        clock_t start = clock(); // ¿ªÊ¼Ê±¼ä
-        avx512_align(A, b, sizes); // Ö´ĞĞ¸ßË¹ÏûÈ¥·¨
-        clock_t end = clock(); // ½áÊøÊ±¼ä
+        clock_t start = clock(); // å¼€å§‹æ—¶é—´
+        avx512_align(A, b, sizes); // æ‰§è¡Œé«˜æ–¯æ¶ˆå»æ³•
+        clock_t end = clock(); // ç»“æŸæ—¶é—´
 
-        float time_taken = float(end - start) / CLOCKS_PER_SEC; // ¼ÆËãÊ±¼ä²î
+        float time_taken = float(end - start) / CLOCKS_PER_SEC; // è®¡ç®—æ—¶é—´å·®
         cout << "Sizes: " << sizes << ", Time taken: " << time_taken << " seconds" << endl;
 
     }
