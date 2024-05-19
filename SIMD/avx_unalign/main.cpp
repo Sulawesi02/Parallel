@@ -31,44 +31,45 @@ void reset(float**& A, float*& b, int n) {
 void avx_unalign(float** A, float* b, int n) {
     // 消元过程
     for (int k = 0; k < n; k++) {
-        __m256 div; // 用于存储除数
-        float factor = A[k][k]; // 保存对角线元素的值
-        div = _mm256_set1_ps(1.0f / factor); // 计算除数的倒数
-        // 使用AVX指令集进行向量化操作
-        for (int i = k + 1; i < n; i++) {
-            // 计算factor，这里假设A[k][k]不为0
-            factor = A[i][k] * factor; // 使用预先计算的倒数
-            // 向量化减法操作
-            int j = n - 8;
-            for (; j >= k; j -= 8) {
-                __m256 t1 = _mm256_loadu_ps(&A[k][j]);
-                __m256 t2 = _mm256_loadu_ps(&A[i][j]);
-                __m256 t3 = _mm256_mul_ps(t1, div);
-                t2 = _mm256_sub_ps(t2, t3);
-                _mm256_storeu_ps(&A[i][j], t2);
-            }
-            // 处理剩余的标量操作
-            for (; j > k; j--) {
-                A[i][j] -= factor * A[k][j];
-            }
-            // 更新b向量
-            b[i] -= factor * b[k];
+        __m256 div = _mm256_set1_ps(A[k][k]);
+        int j = 0;
+        for (j = k + 1; j + 8 <= n; j += 8) {
+            __m256 va = _mm256_loadu_ps(&A[k][j]);
+            va = _mm256_div_ps(va, div);
+            _mm256_storeu_ps(&A[k][j], va);
         }
-        // 将A[k][k]设置为1.0f，因为已经用到了它的倒数
-        A[k][k] = 1.0f;
+        for (; j < n; j++) {
+            A[k][j] /= A[k][k];
+        }
+        b[k] /= A[k][k];
+        A[k][k] = 1.0;
+        for (int i = k + 1; i < n; i++) {
+            __m256 vaik = _mm256_set1_ps(A[i][k]);
+            for (j = k + 1; j + 8 <= n; j += 8) {
+                __m256 vkj = _mm256_loadu_ps(&A[k][j]);
+                __m256 vij = _mm256_loadu_ps(&A[i][j]);
+                __m256 vx = _mm256_mul_ps(vkj, vaik);
+                vij = _mm256_sub_ps(vij, vx);
+                _mm256_storeu_ps(&A[i][j], vij);
+            }
+            for (; j < n; j++) {
+                A[i][j] -= A[i][k] * A[k][j];
+            }
+            b[i] -= A[i][k] * b[k];
+            A[i][k] = 0;
+        }
     }
     // 回代过程
     float* x = new float[n];
-    x[n - 1] = b[n - 1] / A[n - 1][n - 1]; // 计算最后一个元素
-    // 使用标量操作进行回代
+    x[n - 1] = b[n - 1] / A[n - 1][n - 1];
     for (int i = n - 2; i >= 0; i--) {
         float sum = b[i];
         for (int j = i + 1; j < n; j++) {
             sum -= A[i][j] * x[j];
         }
-        x[i] = sum / A[i][i]; // 回代得到x[i]
+        x[i] = sum / A[i][i];
     }
-}
+=}
 
 int main() {
     float** A;

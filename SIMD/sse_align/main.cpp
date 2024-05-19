@@ -31,50 +31,47 @@ void reset(float**& A, float*& b, int n) {
 void sse_align(float** A, float* b, int n) {
     // 消元过程
     for (int k = 0; k < n; k++) {
-        __m128 diagonal = _mm_set1_ps(A[k][k]);
-        A[k][k] = 1.0f; // 消元后设置对角线元素为1.0f
-        // 处理除法部分的对齐
+        __m128 div = _mm_set1_ps(A[k][k]);
         int j = k + 1;
-        while (j % 4 != 0) { // 确保j是4的倍数
+
+        while ((int)(&A[k][j]) % 16)
+        {
             A[k][j] /= A[k][k];
             j++;
         }
-        // 使用SSE进行向量化除法
         for (; j + 4 <= n; j += 4) {
             __m128 row_k = _mm_load_ps(&A[k][j]);
-            __m128 row_k_div = _mm_div_ps(row_k, diagonal);
-            _mm_store_ps(&A[k][j], row_k_div);
+            row_k = _mm_div_ps(row_k, div);
+            _mm_store_ps(&A[k][j], row_k);
         }
-        // 处理剩余的标量除法
         for (; j < n; j++) {
             A[k][j] /= A[k][k];
         }
-        // 更新b向量
+        b[k] /= A[k][k];
+        A[k][k] = 1.0;
         for (int i = k + 1; i < n; i++) {
-            __m128 factor = _mm_set1_ps(A[i][k]);
-            A[i][k] = 0.0f; // 消元
-            // 处理减法部分的对齐
+            __m128 vik = _mm_set1_ps(A[i][k]);
             j = k + 1;
-            while (j % 4 != 0) {
+            while ((int)(&A[k][j]) % 16)
+            {
                 A[i][j] -= A[i][k] * A[k][j];
                 j++;
             }
-            // 使用SSE进行向量化减法
             for (; j + 4 <= n; j += 4) {
-                __m128 row_i = _mm_load_ps(&A[i][j]);
-                __m128 row_k = _mm_load_ps(&A[k][j]);
-                __m128 row_i_sub = _mm_sub_ps(row_i, _mm_mul_ps(row_k, factor));
-                _mm_store_ps(&A[i][j], row_i_sub);
+                __m128 vkj = _mm_load_ps(&A[k][j]);
+                __m128 vij = _mm_loadu_ps(&A[i][j]);
+                __m128 vx = _mm_mul_ps(vik, vkj);
+                vij = _mm_sub_ps(vij, vx);
+                _mm_storeu_ps(&A[i][j], vij);
             }
-            // 处理剩余的标量减法
             for (; j < n; j++) {
                 A[i][j] -= A[i][k] * A[k][j];
             }
-            // 更新b向量
             b[i] -= A[i][k] * b[k];
+            A[i][k] = 0;
         }
     }
-    // 回代过程（标量操作）
+    // 回代过程
     float* x = new float[n];
     x[n - 1] = b[n - 1] / A[n - 1][n - 1];
     for (int i = n - 2; i >= 0; i--) {

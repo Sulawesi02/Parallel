@@ -27,38 +27,37 @@ void reset(float**& A, float*& b, int n) {
     }
 }
 
-
 void neon(float** A, float* b, int n) {
     // 消元过程
     for (int k = 0; k < n; k++) {
-        float32x4_t vk = vdupq_n_f32(A[k][k]);
-        float32x4_t vOneOverK = vdupq_n_f32(1.0f / A[k][k]);
-
-        // 向量化减法操作
-        for (int i = k + 1; i < n; i += 4) {
-            // Load 4 elements from A[k] and A[i]
-            float32x4_t vAik = vld1q_f32(&A[i][k]);
-            float32x4_t vAkk = vld1q_f32(&A[k][k]);
-
-            // Calculate A[i][k] * A[k][k] and store in A[i][k]
-            vAik = vmulq_f32(vAik, vOneOverK);
-
-            // Update A[i][j] for j in [k, n)
-            for (int j = k; j < n; j += 4) {
-                float32x4_t vAkj = vld1q_f32(&A[k][j]);
-                float32x4_t vAij = vld1q_f32(&A[i][j]);
-                vAij = vsubq_f32(vAij, vmulq_f32(vAik, vAkj));
-                vst1q_f32(&A[i][j], vAij);
-            }
-
-            // Update b[i]
-            b[i] = b[i] - A[i][k] * b[k];
+        float32x4_t vt = vdupq_n_f32(A[k][k]);
+        int j = 0;
+        for (j = k + 1; j + 4 <= n; j += 4) {
+            float32x4_t va = vld1q_f32(&A[k][j]);
+            va = vdivq_f32(va, vt);
+            vst1q_f32(&A[k][j], va);
         }
-
-        // Set A[k][k] to 1.0f after using its reciprocal
-        A[k][k] = 1.0f;
+        for (; j < n; j++) {
+            A[k][j] /= A[k][k];
+        }
+        b[k] /= A[k][k];
+        A[k][k] = 1.0;
+        for (int i = k + 1; i < n; i++) {
+            float32x4_t vaik = vdupq_n_f32(A[i][k]);
+            for (j = k + 1; j + 4 <= n; j += 4) {
+                float32x4_t vakj = vld1q_f32(&A[k][j]);
+                float32x4_t vaij = vld1q_f32(&A[i][j]);
+                float32x4_t vx = vmulq_f32(vakj, vaik);
+                vaij = vsubq_f32(vaij, vx);
+                vst1q_f32(&A[i][j], vaij);
+            }
+            for (; j < n; j++) {
+                A[i][j] -= A[i][k] * A[k][j];
+            }
+            b[i] -= A[i][k] * b[k];
+            A[i][k] = 0;
+        }
     }
-
     // 回代过程
     float* x = new float[n];
     x[n - 1] = b[n - 1] / A[n - 1][n - 1]; // 计算最后一个元素

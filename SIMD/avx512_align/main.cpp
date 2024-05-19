@@ -27,54 +27,49 @@ void reset(float**& A, float*& b, int n) {
     }
 }
 
-// AVX-512对齐
 void avx512_align(float** A, float* b, int n) {
     // 消元过程
     for (int k = 0; k < n; k++) {
-        __m512 diagonal = _mm512_set1_ps(A[k][k]);
-        A[k][k] = 1.0f; // 消元后设置对角线元素为1.0f
-        // 处理除法部分的对齐
+        __m512 div = _mm512_set1_ps(A[k][k]);
         int j = k + 1;
-        while (j % 16 != 0) { // 确保j是16的倍数以适应AVX-512的512位寄存器
-            A[k][j] /= A[k][k];
+        while ((int)(&A[k][j]) % 32)
+        {
+            A[k][j] = A[k][j] / A[k][k];
             j++;
         }
-        // 使用AVX-512进行向量化除法
         for (; j + 16 <= n; j += 16) {
             __m512 row_k = _mm512_load_ps(&A[k][j]);
-            __m512 row_k_div = _mm512_div_ps(row_k, diagonal);
-            _mm512_store_ps(&A[k][j], row_k_div);
+            row_k = _mm512_div_ps(row_k, div);
+            _mm512_store_ps(&A[k][j], row_k);
         }
-        // 处理剩余的标量除法
         for (; j < n; j++) {
-            A[k][j] /= A[k][k];
+            A[k][j] = A[k][j] / A[k][k];
         }
-        // 更新b向量
+        b[k] /= A[k][k];
+        A[k][k] = 1.0;
         for (int i = k + 1; i < n; i++) {
-            __m512 factor = _mm512_set1_ps(A[i][k]);
-            A[i][k] = 0.0f; // 消元
-            // 处理减法部分的对齐
+            __m512 vik = _mm512_set1_ps(A[i][k]);
             j = k + 1;
-            while (j % 16 != 0) {
-                A[i][j] -= A[i][k] * A[k][j];
+            while ((int)(&A[k][j]) % 32)
+            {
+                A[i][j] = A[i][j] - A[i][k] * A[k][j];
                 j++;
             }
-            // 使用AVX-512进行向量化减法
             for (; j + 16 <= n; j += 16) {
-                __m512 row_i = _mm512_load_ps(&A[i][j]);
-                __m512 row_k = _mm512_load_ps(&A[k][j]);
-                __m512 row_i_sub = _mm512_sub_ps(row_i, _mm512_mul_ps(row_k, factor));
-                _mm512_store_ps(&A[i][j], row_i_sub);
+                __m512 vkj = _mm512_load_ps(&A[k][j]);
+                __m512 vij = _mm512_loadu_ps(&A[i][j]);
+                __m512 vx = _mm512_mul_ps(vik, vkj);
+                vij = _mm512_sub_ps(vij, vx);
+                _mm512_storeu_ps(&A[i][j], vij);
             }
-            // 处理剩余的标量减法
             for (; j < n; j++) {
-                A[i][j] -= A[i][k] * A[k][j];
+                A[i][j] = A[i][j] - A[i][k] * A[k][j];
             }
-            // 更新b向量
             b[i] -= A[i][k] * b[k];
+            A[i][k] = 0;
         }
     }
-    // 回代过程（标量操作，AVX-512不适用）
+    // 回代过程
     float* x = new float[n];
     x[n - 1] = b[n - 1] / A[n - 1][n - 1];
     for (int i = n - 2; i >= 0; i--) {

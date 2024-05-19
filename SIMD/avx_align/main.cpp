@@ -31,50 +31,46 @@ void reset(float**& A, float*& b, int n) {
 void avx_align(float** A, float* b, int n) {
     // 消元过程
     for (int k = 0; k < n; k++) {
-        __m256 diagonal = _mm256_set1_ps(A[k][k]);
-        A[k][k] = 1.0f; // 消元后设置对角线元素为1.0f
-        // 处理除法部分的对齐
+        __m256 div = _mm256_set1_ps(A[k][k]);
         int j = k + 1;
-        while (j % 8 != 0) { // 确保j是8的倍数以适应AVX的256位寄存器
+        while ((int)(&A[k][j]) % 32)
+        {
             A[k][j] /= A[k][k];
             j++;
         }
-        // 使用AVX进行向量化除法
         for (; j + 8 <= n; j += 8) {
             __m256 row_k = _mm256_load_ps(&A[k][j]);
-            __m256 row_k_div = _mm256_div_ps(row_k, diagonal);
-            _mm256_store_ps(&A[k][j], row_k_div);
+            row_k = _mm256_div_ps(row_k, div);
+            _mm256_store_ps(&A[k][j], row_k);
         }
-        // 处理剩余的标量除法
         for (; j < n; j++) {
             A[k][j] /= A[k][k];
         }
-        // 更新b向量
+        b[k] /= A[k][k];
+        A[k][k] = 1.0;
         for (int i = k + 1; i < n; i++) {
-            __m256 factor = _mm256_set1_ps(A[i][k]);
-            A[i][k] = 0.0f; // 消元
-            // 处理减法部分的对齐
+            __m256 vik = _mm256_set1_ps(A[i][k]);
             j = k + 1;
-            while (j % 8 != 0) {
+            while ((int)(&A[k][j]) % 32)
+            {
                 A[i][j] -= A[i][k] * A[k][j];
                 j++;
             }
-            // 使用AVX进行向量化减法
             for (; j + 8 <= n; j += 8) {
-                __m256 row_i = _mm256_load_ps(&A[i][j]);
-                __m256 row_k = _mm256_load_ps(&A[k][j]);
-                __m256 row_i_sub = _mm256_sub_ps(row_i, _mm256_mul_ps(row_k, factor));
-                _mm256_store_ps(&A[i][j], row_i_sub);
+                __m256 vkj = _mm256_load_ps(&A[k][j]);
+                __m256 vij = _mm256_loadu_ps(&A[i][j]);
+                __m256 vx = _mm256_mul_ps(vik, vkj);
+                vij = _mm256_sub_ps(vij, vx);
+                _mm256_storeu_ps(&A[i][j], vij);
             }
-            // 处理剩余的标量减法
             for (; j < n; j++) {
                 A[i][j] -= A[i][k] * A[k][j];
             }
-            // 更新b向量
             b[i] -= A[i][k] * b[k];
+            A[i][k] = 0;
         }
     }
-    // 回代过程（标量操作）
+    // 回代过程
     float* x = new float[n];
     x[n - 1] = b[n - 1] / A[n - 1][n - 1];
     for (int i = n - 2; i >= 0; i--) {
